@@ -115,7 +115,7 @@
 
 <owl:NamedIndividual rdf:about="#MainVentilation">
   <rdf:type rdf:resource="#VentilationSystem"/>
-  <hasFanSpeed rdf:datatype="http://www.w3.org/2001/XMLSchema#decimal">0.0</hasFanSpeed>
+  <hasFanSpeed rdf:datatype="http://www.w3.org/2001/XMLSchema#decimal">50.0</hasFanSpeed>
   <hasHeaterPower rdf:datatype="http://www.w3.org/2001/XMLSchema#decimal">100.0</hasHeaterPower>
   <hasCoolerPower rdf:datatype="http://www.w3.org/2001/XMLSchema#decimal">0.0</hasCoolerPower>
   <hasHumidifierPower rdf:datatype="http://www.w3.org/2001/XMLSchema#decimal">0.0</hasHumidifierPower>
@@ -123,17 +123,17 @@
 
 <owl:NamedIndividual rdf:about="#TemperatureSensor">
   <rdf:type rdf:resource="#Sensor"/>
-  <hasTemperature rdf:datatype="http://www.w3.org/2001/XMLSchema#decimal">22.363998977343257</hasTemperature>
+  <hasTemperature rdf:datatype="http://www.w3.org/2001/XMLSchema#decimal">45.80605671743841</hasTemperature>
 </owl:NamedIndividual>
 
 <owl:NamedIndividual rdf:about="#HumiditySensor">
   <rdf:type rdf:resource="#Sensor"/>
-  <hasHumidity rdf:datatype="http://www.w3.org/2001/XMLSchema#decimal">50.0</hasHumidity>
+  <hasHumidity rdf:datatype="http://www.w3.org/2001/XMLSchema#decimal">63.99048230778424</hasHumidity>
 </owl:NamedIndividual>
 
 <owl:NamedIndividual rdf:about="#CO2Sensor">
   <rdf:type rdf:resource="#Sensor"/>
-  <hasCO2 rdf:datatype="http://www.w3.org/2001/XMLSchema#decimal">400.0</hasCO2>
+  <hasCO2 rdf:datatype="http://www.w3.org/2001/XMLSchema#decimal">279.8725915676509</hasCO2>
 </owl:NamedIndividual>
 
 

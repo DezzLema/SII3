@@ -285,24 +285,38 @@ class WorkshopSimulator:
 
     def update_environment(self, dt=1.0):
         """Обновление параметров окружающей среды"""
-        # Симуляция суточного цикла температуры (медленно меняется)
-        # При dt > 1 время идет быстрее, значит и цикл ускоряется
+        # Время суток меняется пропорционально dt
         self.time_of_day = (self.time_of_day + dt / 3600) % 24
 
         hour_angle = (self.time_of_day - 6) * np.pi / 12
         self.external_temp = 15.0 + 10.0 * np.sin(hour_angle)
         self.external_humidity = 60.0 + 20.0 * np.cos(hour_angle)
 
-        # Тепловыделение от оборудования (меняется не так быстро, но тоже масштабируем)
-        # Используем dt для вероятности изменения, чтобы при больших dt не было скачков
-        if random.random() < dt / 60.0:  # Примерно раз в минуту реального времени
-            if 8 <= self.time_of_day <= 18:
-                self.heat_generation = random.uniform(5.0, 15.0)
-                self.co2_generation = random.uniform(100, 500) * self.workers_count / 10
-            else:
-                self.heat_generation = random.uniform(1.0, 5.0)
-                self.co2_generation = random.uniform(50, 150) * self.workers_count / 20
-            self.humidity_generation = random.uniform(0.0, 5.0)
+        # Генерация тепла/CO2 - меняем плавно, без резких скачков
+        # Используем dt для плавного перехода между значениями
+        target_heat = 0
+        target_co2 = 0
+
+        if 8 <= self.time_of_day <= 18:
+            target_heat = random.uniform(5.0, 15.0)
+            target_co2 = random.uniform(100, 500) * self.workers_count / 10
+        else:
+            target_heat = random.uniform(1.0, 5.0)
+            target_co2 = random.uniform(50, 150) * self.workers_count / 20
+
+        # Плавное изменение (не более чем на 0.5 в секунду модельного времени)
+        max_change_per_sec = 0.5
+        if abs(target_heat - self.heat_generation) < max_change_per_sec * dt:
+            self.heat_generation = target_heat
+        else:
+            self.heat_generation += max_change_per_sec * dt * (1 if target_heat > self.heat_generation else -1)
+
+        if abs(target_co2 - self.co2_generation) < max_change_per_sec * dt * 50:
+            self.co2_generation = target_co2
+        else:
+            self.co2_generation += max_change_per_sec * dt * 50 * (1 if target_co2 > self.co2_generation else -1)
+
+        self.humidity_generation = random.uniform(0.0, 5.0)
 
     def calculate_changes(self, current_temp, current_humidity, current_co2,
                           fan_speed, heater_power, cooler_power, humidifier_power, dt=1.0):
@@ -639,38 +653,36 @@ class VentilationGUI:
 
     def simulation_loop(self):
         """Основной цикл симуляции"""
-        last_time = time.time()
+        dt_model = 1.0  # Базовый шаг модельного времени (1 секунда)
         step = 0
+        last_real_time = time.time()
 
         while self.is_running:
-            current_time = time.time()
-            # Реальное прошедшее время с учетом скорости симуляции
-            real_dt = current_time - last_time
-            # Модельное время, прошедшее за этот шаг (ускоряется speed)
-            dt = real_dt * self.simulation_speed
+            loop_start = time.time()
 
-            # Ограничиваем максимальный dt, чтобы избежать слишком больших скачков
-            dt = min(dt, 2.0)
+            # Получаем текущую скорость из виджета
+            self.simulation_speed = self.speed_var.get()
 
-            last_time = current_time
-
-            # Обновление внешней среды (передаем dt)
-            self.simulator.update_environment(dt)
+            # Обновление внешней среды с учетом ускорения
+            self.simulator.update_environment(dt_model * self.simulation_speed)
 
             if not self.manual_mode:
+                # Автоматический режим - используем нечеткий контроллер
                 control_outputs = self.fuzzy_controller.compute(
                     self.current_temp, self.current_humidity, self.current_co2
                 )
+
                 self.fan_speed = control_outputs['fan_speed']
                 self.heater_power = control_outputs['heater_power']
                 self.cooler_power = control_outputs['cooler_power']
                 self.humidifier_power = control_outputs['humidifier_power']
 
-            # Расчет изменений параметров (передаем dt)
+            # Расчет изменений параметров с учетом ускорения
+            # dt_model * self.simulation_speed - сколько модельных секунд прошло за этот шаг
             d_temp, d_humidity, d_co2 = self.simulator.calculate_changes(
                 self.current_temp, self.current_humidity, self.current_co2,
                 self.fan_speed, self.heater_power, self.cooler_power, self.humidifier_power,
-                dt
+                dt_model * self.simulation_speed  # ← КЛЮЧЕВОЕ ИЗМЕНЕНИЕ
             )
 
             # Обновление параметров
@@ -683,9 +695,9 @@ class VentilationGUI:
             self.current_humidity = max(0, min(100, self.current_humidity))
             self.current_co2 = max(0, min(2000, self.current_co2))
 
-            # Сохранение истории (шаг по времени увеличивается)
-            current_model_time = step * 1.0  # условное время
-            self.time_history.append(current_model_time)
+            # Сохранение истории (каждый шаг - одна модельная секунда)
+            current_time = step * dt_model
+            self.time_history.append(current_time)
             self.temp_history.append(self.current_temp)
             self.humidity_history.append(self.current_humidity)
             self.co2_history.append(self.current_co2)
@@ -711,12 +723,20 @@ class VentilationGUI:
 
             # Обновление отображения
             self.root.after(0, self.update_display)
-            self.root.after(0, self.update_graphs)
+            if step % 5 == 0:
+                self.root.after(0, self.update_graphs)
 
             step += 1
 
-            # Небольшая задержка, чтобы не перегружать процессор
-            time.sleep(0.05)
+            # Управление скоростью цикла - фиксированная пауза
+            # Чем выше simulation_speed, тем быстрее итерации
+            elapsed = time.time() - loop_start
+            # Базовая задержка 0.05 сек, но при высокой скорости делаем её меньше
+            base_delay = 0.05
+            # При speed=10 задержка 0.005 сек, что дает ~200 итераций/сек
+            delay = base_delay / self.simulation_speed
+            sleep_time = max(0, delay - elapsed)
+            time.sleep(sleep_time)
 
     def update_display(self):
         """Обновление цифровых индикаторов"""
